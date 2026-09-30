@@ -12,7 +12,6 @@ import com.github.dockerjava.api.model.Capability;
 import com.github.dockerjava.api.model.HostConfig;
 import java.nio.file.Path;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -40,6 +39,7 @@ class DockerSandboxExecutorSecurityTest {
 
     @Test
     @DisplayName("HostConfig enforces network=none, cap_drop=ALL, privileged=false, readonly_rootfs=true")
+    @SuppressWarnings({"unchecked", "deprecation"})
     void hostConfigEnforcesStrictIsolation() {
         CreateContainerCmd createCmd = mock(CreateContainerCmd.class);
         CreateContainerResponse createResponse = mock(CreateContainerResponse.class);
@@ -85,6 +85,8 @@ class DockerSandboxExecutorSecurityTest {
         Path dummyWorkspace = Path.of("target/dummy-workspace");
 
         ExecuteResponseDto result = executor.run(executionId, proposedChangeId, "JAVA_MAVEN_TEST", dummyWorkspace);
+        assertThat(result).isNotNull();
+        assertThat(result.status()).isNotBlank();
 
         ArgumentCaptor<HostConfig> captor = ArgumentCaptor.forClass(HostConfig.class);
         verify(createCmd).withHostConfig(captor.capture());

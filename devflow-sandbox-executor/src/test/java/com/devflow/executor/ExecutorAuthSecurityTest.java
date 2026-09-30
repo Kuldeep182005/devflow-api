@@ -23,6 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@SuppressWarnings({"deprecation", "null"})
 class ExecutorAuthSecurityTest {
 
     @Autowired

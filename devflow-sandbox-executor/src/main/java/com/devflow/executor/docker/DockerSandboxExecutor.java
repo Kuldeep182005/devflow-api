@@ -213,6 +213,7 @@ public class DockerSandboxExecutor {
         }
     }
 
+    @SuppressWarnings("deprecation")
     private OutputCollector collectBoundedOutput(String containerId, int maxChars) {
         OutputCollector collector = new OutputCollector(maxChars);
         try {
