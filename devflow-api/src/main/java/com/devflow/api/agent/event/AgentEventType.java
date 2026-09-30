@@ -1,0 +1,15 @@
+package com.devflow.api.agent.event;
+
+public enum AgentEventType {
+    AGENT_STARTED,
+    LLM_REQUESTED,
+    LLM_DECISION_ACCEPTED,
+    LLM_DECISION_REJECTED,
+    TOOL_REQUESTED,
+    TOOL_SUCCEEDED,
+    TOOL_FAILED,
+    AGENT_COMPLETED,
+    AGENT_FAILED,
+    AGENT_CANCELLED,
+    AGENT_LIMIT_REACHED
+}

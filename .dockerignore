@@ -1,0 +1,31 @@
+# Version control
+.git
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Build output (use multi-stage builds instead)
+**/target/
+
+# Environment and secrets
+.env
+*.env
+*.pem
+*.key
+
+# CI
+.github/
+
+# Documentation
+*.md
+LICENSE
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db

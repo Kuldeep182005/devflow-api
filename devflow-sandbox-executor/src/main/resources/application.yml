@@ -1,0 +1,15 @@
+server:
+  port: ${EXECUTOR_PORT:8089}
+
+executor:
+  token: ${SANDBOX_EXECUTOR_TOKEN:devflow-sandbox-secret-token}
+  timeout-seconds: ${EXECUTOR_TIMEOUT_SECONDS:120}
+  cpu-quota: ${EXECUTOR_CPU_QUOTA:100000}
+  cpu-period: ${EXECUTOR_CPU_PERIOD:100000}
+  memory-bytes: ${EXECUTOR_MEMORY_BYTES:1073741824}
+  max-processes: ${EXECUTOR_MAX_PROCESSES:256}
+  max-output-characters: ${EXECUTOR_MAX_OUTPUT_CHARACTERS:20000}
+  workspace-root: ${EXECUTOR_WORKSPACE_ROOT:target/executor-sandboxes}
+  max-workspace-files: ${EXECUTOR_MAX_WORKSPACE_FILES:5000}
+  max-workspace-bytes: ${EXECUTOR_MAX_WORKSPACE_BYTES:52428800}
+  max-file-size-bytes: ${EXECUTOR_MAX_FILE_SIZE_BYTES:5242880}

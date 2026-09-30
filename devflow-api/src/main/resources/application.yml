@@ -1,0 +1,179 @@
+spring:
+  application:
+    name: devflow-api
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/devflow}
+    username: ${DATABASE_USERNAME:devflow}
+    password: ${DATABASE_PASSWORD:}
+    hikari:
+      pool-name: DevFlowHikariPool
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:10}
+      minimum-idle: ${DB_POOL_MIN_IDLE:2}
+      idle-timeout: ${DB_POOL_IDLE_TIMEOUT:300000}
+      connection-timeout: ${DB_POOL_CONN_TIMEOUT:20000}
+      max-lifetime: ${DB_POOL_MAX_LIFETIME:1200000}
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    validate-on-migrate: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:2s}
+      timeout: ${REDIS_COMMAND_TIMEOUT:2s}
+
+server:
+  error:
+    include-message: never
+    include-stacktrace: never
+
+security:
+  jwt:
+    secret: ${JWT_SECRET:devflow-development-secret-key-change-me-before-production-2026}
+    expiration: ${JWT_EXPIRATION:15m}
+  password:
+    bcrypt-strength: ${PASSWORD_BCRYPT_STRENGTH:12}
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    login-limit: ${RATE_LIMIT_LOGIN_LIMIT:10}
+    login-window-seconds: ${RATE_LIMIT_LOGIN_WINDOW_SECONDS:60}
+    register-limit: ${RATE_LIMIT_REGISTER_LIMIT:5}
+    register-window-seconds: ${RATE_LIMIT_REGISTER_WINDOW_SECONDS:60}
+    webhook-limit: ${RATE_LIMIT_WEBHOOK_LIMIT:120}
+    webhook-window-seconds: ${RATE_LIMIT_WEBHOOK_WINDOW_SECONDS:60}
+    task-create-limit: ${RATE_LIMIT_TASK_CREATE_LIMIT:30}
+    task-create-window-seconds: ${RATE_LIMIT_TASK_CREATE_WINDOW_SECONDS:60}
+    approval-execute-limit: ${RATE_LIMIT_APPROVAL_EXECUTE_LIMIT:20}
+    approval-execute-window-seconds: ${RATE_LIMIT_APPROVAL_EXECUTE_WINDOW_SECONDS:60}
+    global-limit: ${RATE_LIMIT_GLOBAL_LIMIT:300}
+    global-window-seconds: ${RATE_LIMIT_GLOBAL_WINDOW_SECONDS:60}
+
+
+github:
+  app:
+    id: ${GITHUB_APP_ID:}
+    private-key: ${GITHUB_APP_PRIVATE_KEY:}
+    base-url: ${GITHUB_BASE_URL:https://api.github.com}
+    connect-timeout: ${GITHUB_CONNECT_TIMEOUT:5s}
+    read-timeout: ${GITHUB_READ_TIMEOUT:10s}
+    max-response-bytes: ${GITHUB_MAX_RESPONSE_BYTES:1048576}
+  webhook:
+    secret: ${GITHUB_WEBHOOK_SECRET:}
+    max-body-bytes: ${GITHUB_WEBHOOK_MAX_BODY_BYTES:1048576}
+    max-delivery-id-length: ${GITHUB_WEBHOOK_MAX_DELIVERY_ID_LENGTH:255}
+    max-event-name-length: ${GITHUB_WEBHOOK_MAX_EVENT_NAME_LENGTH:100}
+    max-signature-length: ${GITHUB_WEBHOOK_MAX_SIGNATURE_LENGTH:71}
+
+llm:
+  enabled: ${LLM_ENABLED:false}
+  provider: ${LLM_PROVIDER:openai-compatible}
+  base-url: ${LLM_BASE_URL:}
+  model: ${LLM_MODEL:}
+  api-key: ${LLM_API_KEY:}
+  connect-timeout: ${LLM_CONNECT_TIMEOUT:5s}
+  request-timeout: ${LLM_REQUEST_TIMEOUT:30s}
+  max-response-bytes: ${LLM_MAX_RESPONSE_BYTES:1048576}
+  max-prompt-characters: ${LLM_MAX_PROMPT_CHARACTERS:12000}
+  max-output-tokens: ${LLM_MAX_OUTPUT_TOKENS:2048}
+  default-temperature: ${LLM_DEFAULT_TEMPERATURE:0.2}
+
+repository-tools:
+  enabled: ${REPOSITORY_TOOLS_ENABLED:false}
+  max-file-bytes: ${REPOSITORY_TOOLS_MAX_FILE_BYTES:1048576}
+  max-list-results: ${REPOSITORY_TOOLS_MAX_LIST_RESULTS:500}
+  max-search-results: ${REPOSITORY_TOOLS_MAX_SEARCH_RESULTS:200}
+  max-files-scanned: ${REPOSITORY_TOOLS_MAX_FILES_SCANNED:2000}
+  max-snippet-characters: ${REPOSITORY_TOOLS_MAX_SNIPPET_CHARACTERS:240}
+  max-search-query-characters: ${REPOSITORY_TOOLS_MAX_SEARCH_QUERY_CHARACTERS:256}
+  max-directory-depth: ${REPOSITORY_TOOLS_MAX_DIRECTORY_DEPTH:20}
+  workspaces: {}
+
+async:
+  outbox:
+    poll-interval-ms: ${ASYNC_OUTBOX_POLL_INTERVAL_MS:1000}
+    batch-size: ${ASYNC_OUTBOX_BATCH_SIZE:25}
+
+    claim-timeout-seconds: ${ASYNC_OUTBOX_CLAIM_TIMEOUT_SECONDS:60}
+    retry-delay-ms: ${ASYNC_OUTBOX_RETRY_DELAY_MS:1000}
+  worker:
+    enabled: ${ASYNC_WORKER_ENABLED:true}
+    stream: ${ASYNC_WORKER_STREAM:devflow:jobs}
+    consumer-group: ${ASYNC_WORKER_CONSUMER_GROUP:devflow-workers}
+    consumer-name: ${ASYNC_WORKER_CONSUMER_NAME:${HOSTNAME:devflow-worker}}
+    concurrency: ${ASYNC_WORKER_CONCURRENCY:4}
+    block-timeout-ms: ${ASYNC_WORKER_BLOCK_TIMEOUT_MS:1000}
+    pending-idle-ms: ${ASYNC_WORKER_PENDING_IDLE_MS:30000}
+    job-timeout-ms: ${ASYNC_WORKER_JOB_TIMEOUT_MS:30000}
+    max-attempts: ${ASYNC_WORKER_MAX_ATTEMPTS:5}
+    retry-base-delay-ms: ${ASYNC_WORKER_RETRY_BASE_DELAY_MS:1000}
+    shutdown-timeout-ms: ${ASYNC_WORKER_SHUTDOWN_TIMEOUT_MS:10000}
+
+proposed-changes:
+  max-changed-files: ${PROPOSED_CHANGES_MAX_CHANGED_FILES:50}
+  max-path-length: ${PROPOSED_CHANGES_MAX_PATH_LENGTH:1000}
+  max-patch-characters: ${PROPOSED_CHANGES_MAX_PATCH_CHARACTERS:200000}
+  max-patch-bytes: ${PROPOSED_CHANGES_MAX_PATCH_BYTES:400000}
+  max-added-lines: ${PROPOSED_CHANGES_MAX_ADDED_LINES:10000}
+  max-removed-lines: ${PROPOSED_CHANGES_MAX_REMOVED_LINES:10000}
+  max-file-patch-characters: ${PROPOSED_CHANGES_MAX_FILE_PATCH_CHARACTERS:100000}
+  max-title-characters: ${PROPOSED_CHANGES_MAX_TITLE_CHARACTERS:255}
+  max-description-characters: ${PROPOSED_CHANGES_MAX_DESCRIPTION_CHARACTERS:4000}
+
+sandbox:
+  enabled: ${SANDBOX_ENABLED:true}
+  executor-url: ${SANDBOX_EXECUTOR_URL:http://localhost:8089}
+  executor-token: ${SANDBOX_EXECUTOR_TOKEN:devflow-sandbox-secret-token}
+  connect-timeout-ms: ${SANDBOX_CONNECT_TIMEOUT_MS:5000}
+  read-timeout-ms: ${SANDBOX_READ_TIMEOUT_MS:130000}
+  execution-timeout: ${SANDBOX_EXECUTION_TIMEOUT:2m}
+  cpu-period: ${SANDBOX_CPU_PERIOD:100000}
+  cpu-quota: ${SANDBOX_CPU_QUOTA:200000}
+  memory-bytes: ${SANDBOX_MEMORY_BYTES:1073741824}
+  max-processes: ${SANDBOX_MAX_PROCESSES:256}
+  max-workspace-bytes: ${SANDBOX_MAX_WORKSPACE_BYTES:104857600}
+  max-files: ${SANDBOX_MAX_FILES:1000}
+  max-individual-file-bytes: ${SANDBOX_MAX_INDIVIDUAL_FILE_BYTES:10485760}
+  max-output-characters: ${SANDBOX_MAX_OUTPUT_CHARACTERS:20000}
+
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+      roles: ADMIN
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: db,readinessState
+        liveness:
+          include: livenessState
+    info:
+      enabled: true
+
+
+logging:
+  pattern:
+    correlation: "[requestId=%X{requestId}] "
+agent:
+  enabled: ${AGENT_ENABLED:false}
+  max-iterations: ${AGENT_MAX_ITERATIONS:20}
+  max-tool-calls: ${AGENT_MAX_TOOL_CALLS:30}
+  max-context-characters: ${AGENT_MAX_CONTEXT_CHARACTERS:30000}
+  max-tool-result-characters: ${AGENT_MAX_TOOL_RESULT_CHARACTERS:12000}
+  max-final-response-characters: ${AGENT_MAX_FINAL_RESPONSE_CHARACTERS:4000}
+  max-reasoning-summary-characters: ${AGENT_MAX_REASONING_SUMMARY_CHARACTERS:500}
+  max-execution-duration: ${AGENT_MAX_EXECUTION_DURATION:5m}

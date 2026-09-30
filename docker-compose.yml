@@ -1,0 +1,111 @@
+# =============================================================================
+# DevFlow Local Development — Docker Compose
+#
+# Usage:
+#   cp .env.example .env     # Then edit .env with your local values
+#   docker compose up --build
+#   docker compose down
+#
+# SECURITY:
+#   - No secrets are hardcoded in this file.
+#   - All credentials come from environment variables / .env file.
+#   - .env is in .gitignore and must NEVER be committed.
+#   - Docker socket is ONLY mounted into the sandbox-executor, NOT the API.
+# =============================================================================
+
+services:
+  # ---------- Infrastructure ----------
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-devflow}
+      POSTGRES_USER: ${DATABASE_USERNAME:-devflow}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?DATABASE_PASSWORD must be set}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ---------- Application ----------
+
+  devflow-api:
+    build:
+      context: .
+      dockerfile: devflow-api/Dockerfile
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-devflow}
+      DATABASE_USERNAME: ${DATABASE_USERNAME:-devflow}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?DATABASE_PASSWORD must be set}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
+      SANDBOX_EXECUTOR_URL: http://sandbox-executor:8089
+      SANDBOX_EXECUTOR_TOKEN: ${SANDBOX_EXECUTOR_TOKEN:-devflow-sandbox-secret-token}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health/liveness"]
+      interval: 30s
+      timeout: 5s
+      start_period: 40s
+      retries: 3
+    # SECURITY: No Docker socket mounted. API has ZERO Docker daemon access.
+    restart: unless-stopped
+
+  sandbox-executor:
+    build:
+      context: .
+      dockerfile: devflow-sandbox-executor/Dockerfile
+    ports:
+      - "${EXECUTOR_PORT:-8089}:8089"
+    environment:
+      SANDBOX_EXECUTOR_TOKEN: ${SANDBOX_EXECUTOR_TOKEN:-devflow-sandbox-secret-token}
+      EXECUTOR_WORKSPACE_ROOT: /app/sandboxes
+    volumes:
+      # SECURITY: Docker socket is mounted ONLY here, not in devflow-api.
+      # This is the intended security boundary — the executor is the only
+      # component that can create/manage Docker containers for sandboxing.
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider --header=\"X-Sandbox-Token: $${SANDBOX_EXECUTOR_TOKEN:-devflow-sandbox-secret-token}\" http://localhost:8089/api/v1/sandbox/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:

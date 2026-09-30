@@ -1,0 +1,201 @@
+# =============================================================================
+# DevFlow Release Pipeline — GitHub Actions
+#
+# Triggers: Git tags matching v*.*.* or manual dispatch
+#
+# Pipeline stages:
+#   1. Full Maven Verify (tests + integration tests)
+#   2. Dependency Security Check
+#   3. Docker Build with immutable tags (commit SHA + version)
+#   4. Image Security Scan (Trivy)
+#   5. Publish to GitHub Container Registry (GHCR)
+#   6. Release metadata
+#
+# SECURITY:
+#   - Only runs on trusted tags/branches — never on fork PRs
+#   - Uses GITHUB_TOKEN for GHCR auth (no static credentials)
+#   - Immutable image tags (SHA + version) — no overwriting
+#   - Security scan MUST pass before publishing
+# =============================================================================
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 0.1.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write  # Required for GHCR push
+
+env:
+  JAVA_VERSION: '21'
+  JAVA_DISTRIBUTION: 'temurin'
+  REGISTRY: ghcr.io
+  API_IMAGE_NAME: ${{ github.repository_owner }}/devflow-api
+  EXECUTOR_IMAGE_NAME: ${{ github.repository_owner }}/devflow-sandbox-executor
+
+jobs:
+  # ================================================================
+  # Job 1: Full Test Suite
+  # ================================================================
+  test:
+    name: Full Test Suite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      - name: Make Maven wrapper executable
+        run: chmod +x ./mvnw
+
+      - name: Maven Verify
+        run: ./mvnw clean verify -B -V
+
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-test-reports
+          path: |
+            **/target/surefire-reports/
+            **/target/failsafe-reports/
+          retention-days: 14
+
+  # ================================================================
+  # Job 2: Build, Scan, and Publish Docker Images
+  # ================================================================
+  publish:
+    name: Build & Publish Images
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine version and tags
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          SHA=$(git rev-parse --short HEAD)
+          FULL_SHA=$(git rev-parse HEAD)
+
+          if [ -n "${INPUT_VERSION}" ]; then
+            VERSION="${INPUT_VERSION}"
+          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            VERSION="0.0.1-SNAPSHOT"
+          fi
+
+          echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+          echo "full_sha=${FULL_SHA}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: devflow-api/Dockerfile
+          push: false
+          load: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.API_IMAGE_NAME }}:${{ steps.version.outputs.sha }}
+            ${{ env.REGISTRY }}/${{ env.API_IMAGE_NAME }}:${{ steps.version.outputs.version }}
+          build-args: |
+            BUILD_DATE=${{ steps.version.outputs.build_date }}
+            VCS_REF=${{ steps.version.outputs.full_sha }}
+            VERSION=${{ steps.version.outputs.version }}
+
+      - name: Build Executor image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: devflow-sandbox-executor/Dockerfile
+          push: false
+          load: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.EXECUTOR_IMAGE_NAME }}:${{ steps.version.outputs.sha }}
+            ${{ env.REGISTRY }}/${{ env.EXECUTOR_IMAGE_NAME }}:${{ steps.version.outputs.version }}
+          build-args: |
+            BUILD_DATE=${{ steps.version.outputs.build_date }}
+            VCS_REF=${{ steps.version.outputs.full_sha }}
+            VERSION=${{ steps.version.outputs.version }}
+
+      # ------- Security Gate (must pass before publish) -------
+
+      - name: Trivy scan — API image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.API_IMAGE_NAME }}:${{ steps.version.outputs.sha }}
+          format: table
+          exit-code: 1
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Trivy scan — Executor image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.EXECUTOR_IMAGE_NAME }}:${{ steps.version.outputs.sha }}
+          format: table
+          exit-code: 1
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      # ------- Publish (only after security gate passes) -------
+
+      - name: Push API image to GHCR
+        run: |
+          docker push "${{ env.REGISTRY }}/${{ env.API_IMAGE_NAME }}:${{ steps.version.outputs.sha }}"
+          docker push "${{ env.REGISTRY }}/${{ env.API_IMAGE_NAME }}:${{ steps.version.outputs.version }}"
+
+      - name: Push Executor image to GHCR
+        run: |
+          docker push "${{ env.REGISTRY }}/${{ env.EXECUTOR_IMAGE_NAME }}:${{ steps.version.outputs.sha }}"
+          docker push "${{ env.REGISTRY }}/${{ env.EXECUTOR_IMAGE_NAME }}:${{ steps.version.outputs.version }}"
+
+      - name: Release summary
+        env:
+          REL_VERSION: ${{ steps.version.outputs.version }}
+          REL_COMMIT: ${{ steps.version.outputs.full_sha }}
+          REL_API_IMAGE: ${{ env.REGISTRY }}/${{ env.API_IMAGE_NAME }}:${{ steps.version.outputs.sha }}
+          REL_EXECUTOR_IMAGE: ${{ env.REGISTRY }}/${{ env.EXECUTOR_IMAGE_NAME }}:${{ steps.version.outputs.sha }}
+          REL_BUILD_DATE: ${{ steps.version.outputs.build_date }}
+        run: |
+          echo "## Release Published" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Property | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| --- | --- |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Version | ${REL_VERSION} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Commit | ${REL_COMMIT} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| API Image | \`${REL_API_IMAGE}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Executor Image | \`${REL_EXECUTOR_IMAGE}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Build Date | ${REL_BUILD_DATE} |" >> "$GITHUB_STEP_SUMMARY"
